@@ -9,7 +9,7 @@ def client_program():
         client_socket.connect((host, port))  # 连接到服务端
         print("连接到服务器成功！")
 
-        message = '你好，服务器！'  # 需要发送给服务端的信息
+        message = 'P01C01T'  # 需要发送给服务端的信息
         while message.lower().strip() != '再见':
             client_socket.send(message.encode())  # 发送数据
             data = client_socket.recv(1024).decode()  # 接收响应

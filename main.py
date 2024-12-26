@@ -1,25 +1,24 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
-import threading
-import tkinter as tk
-from tkinter import ttk, PhotoImage, Label, filedialog
-from tkinter.font import Font
-from PIL import Image, ImageTk
-
-import sys
-sys.path.append(r"C:\Users\Administrator\PycharmProjects\pythonProject3")
-# import clrclr.AddReference("krcc64")
+# import clr
+# clr.AddReference("krcc64")
 # import KRcc
 import socket
-from tkinter import PhotoImage
+import threading
+import tkinter as tk
+from tkinter import ttk, Label, filedialog, PhotoImage, messagebox
+from tkinter.font import Font
 
-# 初始化日志记录
+from PIL import Image, ImageTk
+
+# Initialize logging
 logging.basicConfig(
-    filename="robotic_arm.log",  # 日志文件名
-    level=logging.INFO,          # 日志级别
-    format="%(asctime)s - %(levelname)s - %(message)s",  # 日志格式：时间戳 - 日志级别 - 消息
-    encoding='utf-8'             # 指定日志文件编码为 utf-8
+    filename='robotic_arm.log',  # Log file name
+    level=logging.INFO,          # Log level
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Log format: timestamp - log level - message
+    encoding='utf-8',            # Specify log file encoding as utf-8
+    filemode='w'                 # Open the log file in write mode to overwrite existing content
 )
 
 class TCPServerThread(threading.Thread):
@@ -41,27 +40,27 @@ class TCPServerThread(threading.Thread):
             client_socket, addr = self.server_socket.accept()
             logging.info(f"Connection established from: {addr}")
             print(f"连接来自: {addr}")
-            self.app.client_connected = True
-            self.app.update_on_air_status(True)
 
             try:
                 while True:
                     data = client_socket.recv(1024).decode('utf-8')
                     if not data:
                         break
+
                     logging.info(f"Received command: {data}")
                     print(f"接收到数据: {data}")
+
                     # 处理数据
+                    data_text = data[:7]
+                    self.app.received_data = data_text
+                    self.app.compare_p01c01_content()  # 自动对比 P01C01 内容
             except ConnectionResetError:
                 logging.warning(f"Connection forcibly closed by remote host: {addr}")
                 print(f"连接被远程主机强制关闭: {addr}")
             finally:
-                self.app.client_connected = False
-                self.app.update_on_air_status(False)
                 client_socket.close()  # 确保在退出循环时关闭客户端socket
                 logging.info(f"Connection closed: {addr}")
                 print("客户端连接已关闭，等待新的连接...")
-
 
 class App:
     def __init__(self, root):
@@ -70,100 +69,230 @@ class App:
         self.root = root
         self.root.title("Auto Play")
         self.root.geometry(f"{self.win_width}x{self.win_height}")
-        self.root.configure(bg="#2F2F2F")
+        # self.root.resizable(False, False)
+        self.root.configure(bg="#252525")
 
         self.server_active = False  # 跟踪服务端是否活跃
-        self.client_connected = False  # 跟踪客户端是否连接
+        self.on_air = False         # 跟踪 on-air 状态
 
         self.TCP_HOST = '192.168.1.186'  # 监听所有网络接口
-        self.TCP_PORT = 8888  # TCP 服务器端口
-        # self.comm = KRcc.Commu("TCP 192.168.1.120")
-        #self.comm = KRcc.Commu("EXECUTE gkamain")
+        self.TCP_PORT = 8888             # TCP 服务器端口
+
+        # TODO: 实例化 KRcc.Commu 类，用于与机械臂通信；示例中先用 MockComm
         self.comm = MockComm()
+        # self.comm = KRcc.Commu("TCP 192.168.1.120")
 
-        # 加载并调整图片大小
-        original_image = Image.open("header_image.png")
-        new_height = int(original_image.height * (self.win_width / original_image.width))
-        resize_image = original_image.resize((self.win_width, new_height))
-        self.header_image = ImageTk.PhotoImage(resize_image)
+        # 1. 创建顶部 Frame 来放置图片
+        self.top_image_frame = tk.Frame(self.root, bg="#252525")
+        self.top_image_frame.grid(row=0, column=0, sticky="ew")
 
-        # 创建顶部 Frame 来放置图片
-        top_image_frame = tk.Frame(self.root, bg="#2F2F2F")
-        top_image_frame.grid(row=0, column=0, sticky="ew")  # 使用 grid
-        self.root.grid_columnconfigure(0, weight=1)
+        # 创建 Label 来显示顶部图片
+        self.header_image = PhotoImage(file="assets/header_image_w640.png")  # 加载图片
+        self.header_label = Label(self.top_image_frame, image=self.header_image, borderwidth=0)
+        self.header_label.grid(row=0, column=0, sticky="ew")
 
-        # 创建 Label 来显示图片
-        header_label = Label(top_image_frame, image=self.header_image)
-        header_label.grid(row=0, column=0, sticky="ew")  # 使用 grid
+        # 2.创建顶部控件的 Frame
+        top_frame = tk.Frame(self.root, bg="#252525")
+        top_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=20)
+        button_width = 8   # 按钮宽度设置为8个字符宽
+        button_height = 2  # 按钮高度设置为2个字符高
 
-        # 创建顶部控件的 Frame
-        top_frame = tk.Frame(self.root, bg="#2F2F2F")
-        top_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
-        self.root.grid_columnconfigure(0, weight=1)  # 使 top_frame 水平扩展
-        button_width = 10  # 按钮宽度设置为10个字符宽
-        bold_font = Font(family="Segoe UI", size=10, weight="bold")  # 创建加粗字体
+        # 2.1. Vizrt 按钮(启动 TCP 服务器)
+        self.vizrt_on_icon = Image.open("assets/Vizrt-T.png")
+        self.vizrt_on_icon = self.vizrt_on_icon.resize((button_width * 15, button_height * 25))
+        self.vizrt_on_icon_image = ImageTk.PhotoImage(self.vizrt_on_icon)
 
-        # 添加运镜按钮
-        self.add_button = tk.Button(top_frame, text="添加运镜", command=self.add_row, bg="gray", width=button_width, fg='white', font=bold_font)
-        self.add_button.grid(row=0, column=0, padx=3, pady=3)
+        self.vizrt_off_icon = Image.open("assets/Vizrt-F.png")
+        self.vizrt_off_icon = self.vizrt_off_icon.resize((button_width * 15, button_height * 25))
+        self.vizrt_off_icon_image = ImageTk.PhotoImage(self.vizrt_off_icon)
 
-        # Vizrt 按钮(启动 TCP 服务器)
-        self.start_server_button = tk.Button(top_frame, text="Vizrt", command=self.start_tcp_server, bg="gray", width=button_width, fg='white', font=bold_font)
-        self.start_server_button.grid(row=0, column=1, padx=3, pady=3)
+        # button of Vizrt
+        self.btn_vizrt = tk.Button(
+            top_frame,
+            image=self.vizrt_off_icon_image,
+            bg="#252525",
+            activebackground="#252525",
+            highlightthickness=0,
+            highlightbackground="#252525",
+            highlightcolor="#252525",
+            borderwidth=0,
+            relief=tk.FLAT,
+            command=self.start_tcp_server
+        )
+        self.btn_vizrt.image = self.vizrt_off_icon_image  # 保留引用
+        self.btn_vizrt.grid(row=0, column=0)
 
-        # 连接状态指示器
-        self.status_canvas = tk.Canvas(top_frame, width=60, height=60, bg="#2F2F2F", bd=0, highlightthickness=0)
-        self.status_canvas.grid(row=0, column=2, padx=3, pady=3)
-        self.on_air_indicator = self.status_canvas.create_oval(5, 5, 55, 55, fill='gray', outline='')
-        self.on_air_text = self.status_canvas.create_text(30, 30, text="ON AIR", fill='white', font=bold_font)
+        # 2.2. ON AIR 按钮
+        self.on_air_on_icon = Image.open("assets/OnAir-T.png")
+        self.on_air_on_icon = self.on_air_on_icon.resize((button_width * 15, button_height * 25))
+        self.on_air_on_icon_image = ImageTk.PhotoImage(self.on_air_on_icon)
 
-        # 机械臂控制按钮
-        self.pow_on_button = tk.Button(top_frame, text="开启机械臂", command=self.pow_on, bg="gray", width=button_width, fg='white', font=bold_font)
-        self.pow_on_button.grid(row=0, column=3, padx=3, pady=3)
+        self.on_air_off_icon = Image.open("assets/OnAir-F.png")
+        self.on_air_off_icon = self.on_air_off_icon.resize((button_width * 15, button_height * 25))
+        self.on_air_off_icon_image = ImageTk.PhotoImage(self.on_air_off_icon)
 
-        self.pow_off_button = tk.Button(top_frame, text="关闭机械臂", command=self.pow_off, bg="gray", width=button_width, fg='white', font=bold_font)
-        self.pow_off_button.grid(row=0, column=4, padx=3, pady=3)
+        # button of ON AIR
+        self.btn_on_air = tk.Button(
+            top_frame,
+            image=self.on_air_off_icon_image,
+            bg="#252525",
+            activebackground="#252525",
+            highlightthickness=0,
+            highlightbackground="#252525",
+            highlightcolor="#252525",
+            borderwidth=0,
+            relief=tk.FLAT,
+            command=self.update_on_air_status
+        )
+        self.btn_on_air.image = self.on_air_off_icon_image
+        self.btn_on_air.grid(row=0, column=1)
 
-        self.pause_button = tk.Button(top_frame, text="暂停", command=self.pause, bg="gray", width=button_width, fg='white', font=bold_font)
-        self.pause_button.grid(row=0, column=5, padx=3, pady=3)
+        # 2.3. Pause 按钮
+        pause_icon = Image.open("assets/Pause.png")
+        pause_icon = pause_icon.resize((button_width * 15, button_height * 25))
+        pause_icon_image = ImageTk.PhotoImage(pause_icon)
+
+        # button of Pause
+        self.btn_pause = tk.Button(
+            top_frame,
+            image=pause_icon_image,
+            bg="#252525",
+            activebackground="#252525",
+            highlightthickness=0,
+            highlightbackground="#252525",
+            highlightcolor="#252525",
+            borderwidth=0,
+            relief=tk.FLAT,
+            command=self.pause
+        )
+        self.btn_pause.image = pause_icon_image
+        self.btn_pause.grid(row=0, column=2)
+
+        # 2.4. 添加运镜按钮
+        add_icon = Image.open("assets/Add.png")
+        add_icon = add_icon.resize((button_width * 15, button_height * 25))
+        add_icon_image = ImageTk.PhotoImage(add_icon)
+
+        # button of Add
+        self.add_button = tk.Button(
+            top_frame,
+            image=add_icon_image,
+            bg="#252525",
+            activebackground="#252525",
+            highlightthickness=0,
+            highlightbackground="#252525",
+            highlightcolor="#252525",
+            borderwidth=0,
+            relief=tk.FLAT,
+            command=self.add_row
+        )
+        self.add_button.image = add_icon_image
+        self.add_button.grid(row=0, column=3)
+
+        # 2.5. Home 按钮
+        home_icon = Image.open("assets/Home.png")
+        home_icon = home_icon.resize((button_width * 15, button_height * 25))
+        home_icon_image = ImageTk.PhotoImage(home_icon)
+
+        # button of Home
+        self.home_button = tk.Button(
+            top_frame,
+            image=home_icon_image,
+            bg="#252525",
+            activebackground="#252525",
+            highlightthickness=0,
+            highlightbackground="#252525",
+            highlightcolor="#252525",
+            borderwidth=0,
+            relief=tk.FLAT,
+            command=self.home  # 这里还是会抛出 NotImplementedError
+        )
+        self.home_button.image = home_icon_image
+        self.home_button.grid(row=0, column=4)
 
         # 调整列权重以实现居中
-        for i in range(6):
+        for i in range(5):
             top_frame.grid_columnconfigure(i, weight=1)
-        top_frame.grid_columnconfigure(2, weight=2)  # 增加中间列的权重
+        top_frame.grid_columnconfigure(2, weight=2)
 
-        # 创建一个 Frame 用于放置动态添加的行
-        self.frame = tk.Frame(root)
-        self.frame.grid(row=2, column=0, columnspan=5, sticky="nsew")
+        # 3. 创建一个 Frame 用于放置动态添加的行
+        self.program_frame = tk.Frame(root, bg="#252525")
+        self.program_frame.grid(row=2, column=0, columnspan=5, sticky="ew")
 
         # 创建一个 Canvas 用于滚动
-        self.canvas = tk.Canvas(self.frame,width=580,height=570)
+        self.canvas = tk.Canvas(
+            self.program_frame,
+            width=self.win_width - 10,
+            height=self.win_height,
+            bg="#252525",
+            borderwidth=0,
+            highlightthickness=0
+        )
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # 创建一个 Scrollbar
-        self.scrollbar = ttk.Scrollbar(self.frame, orient="vertical", command=self.canvas.yview)
+        self.scrollbar = ttk.Scrollbar(self.program_frame, orient="vertical", command=self.canvas.yview)
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # 配置 Canvas
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         self.canvas.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.configure(bg="#2F2F2F")
-        # 创建一个 Frame 用于放置内容
-        self.inner_frame = tk.Frame(self.canvas)
-        self.inner_frame.configure(bg="#2F2F2F")
 
+        # 创建一个 Frame 用于放置内容
+        self.inner_frame = tk.Frame(self.canvas, bg="#252525")
         self.canvas.create_window((0, 0), window=self.inner_frame, anchor="nw")
+
+        # 配置列宽
+        self.column_config = [
+            {"weight": 1, "minsize": 10, "width": 10},  # 截图列
+            {"weight": 1, "minsize": 8, "width": 8},    # Vizrt指令列
+            {"weight": 1, "minsize": 10, "width": 13},  # 运镜名列
+            {"weight": 1, "minsize": 10, "width": 8},   # 运行速度列
+            {"weight": 1, "minsize": 10, "width": 13},  # 备注列
+            {"weight": 1, "minsize": 10, "width": 13},  # 控制列
+            {"weight": 1, "minsize": 5, "width": 5},    # 删除列
+        ]
+
+        # 创建表头
+        self.create_table_header()
+
+        # 4. 创建底部锁定按钮
+        # Create the lock button
+        self.lock_button = tk.Button(
+            self.root,
+            text="Lock",
+            command=self.toggle_lock_screen,
+            bg="#252525",
+            fg="white",
+            font=Font(family="Microsoft YaHei", size=8),
+            width=4,
+            height=2
+        )
+        self.lock_button.place(relx=0, rely=1, anchor='sw')
+
+        # Load the upload icon
+        upload_icon = Image.open("assets/Upload-image.png")
+        icon_width, icon_height = 30, 20  # Set the desired size for the icon
+        upload_icon = upload_icon.resize((icon_width, icon_height))
+        new_image = Image.new("RGBA", (90, 60), (0, 0, 0, 0))
+        x = (90 - icon_width) // 2
+        y = (60 - icon_height) // 2
+        new_image.paste(upload_icon, (x, y), upload_icon)
+        self.upload_icon_image = ImageTk.PhotoImage(new_image)
 
         # 初始化行号
         self.row_count = 1
+
+        # 存储输入框的引用
         self.program_entries = []
         self.speed_entries = []
 
         # 加载保存的数据（如果存在）
         self.load_data()
 
-        # 添加初始行
-        self.add_row()
+        # 如果没有加载到任何数据，则添加初始行
+        if self.row_count == 1:
+            self.add_row()
 
         # TCP 服务器线程
         self.server_thread = None
@@ -174,82 +303,213 @@ class App:
         # 绑定窗口关闭事件
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        # 创建表头
-        self.create_table_header()
+    # Vizrt 按钮的回调函数
+    def start_tcp_server(self):
+        if not self.server_active:
+            self.server_thread = TCPServerThread(self)
+            self.server_thread.start()
+            self.server_active = True
+            self.btn_vizrt.config(image=self.vizrt_on_icon_image)
+            self.root.update_idletasks()  # 强制 GUI 刷新
+            print("TCP 服务器已启动")
+        else:
+            print("TCP 服务器已经在运行")
 
-    def create_table_header(self):
-        headers = ["截图", "Vizrt指令", "运镜名", "运行速度", "备注", "控制"]
+    def update_on_air_status(self):
+        if self.on_air:
+            # Turn off the robotic arm
+            logging.info("Preparing to send command: ZPOWER OFF")
+            self.comm.command("ZPOWER OFF")
+            self.on_air = False
+            self.btn_on_air.config(image=self.on_air_off_icon_image)  # Change to "off" image
+        else:
+            # Turn on the robotic arm
+            logging.info("Preparing to send commands: ZPOWER ON, EXECUTE gkamain")
+            self.comm.command("ZPOWER ON")
+            self.comm.command("EXECUTE gkamain")
+            self.on_air = True
+            self.btn_on_air.config(image=self.on_air_on_icon_image)  # Change to "on" image
 
-        # 表头的权重和最小宽度设置
-        column_config = [
-            {"weight": 1, "minsize": 90},  # 截图列
-            {"weight": 1, "minsize": 10},  # Vizrt指令列
-            {"weight": 1, "minsize": 10},  # 运镜名列
-            {"weight": 1, "minsize": 10},  # 运行速度列
-            {"weight": 1, "minsize": 10},  # 备注列
-            {"weight": 1, "minsize": 10},  # 控制列
-        ]
+    # 暂停按钮的回调函数
+    def pause(self):
+        logging.info("Preparing to send command: SWITCH CS for pause or continue check")
+        retrun, srun = self.comm.command("SWITCH CS")
+        logging.info(f"Received response: {srun}")
 
-        # 为每列设置表头
-        for index, header in enumerate(headers):
-            label = tk.Label(self.inner_frame, text=header, bg="#808080", font=('Segoe UI', 10, 'bold'))
-            label.grid(row=0, column=index, padx=5, pady=5, sticky='ew')
+        # 判断返回里是否含有 'ON'
+        claa = 'ON'
+        all_words_exist = all(word.lower() in srun.lower() for word in claa)
+        if all_words_exist:
+            self.comm.command("HOLD")
+        else:
+            self.comm.command("CONTINUE")
 
-            # 配置每列的宽度
-            self.inner_frame.grid_columnconfigure(index, weight=column_config[index]["weight"], minsize=column_config[index]["minsize"])
-
+    # 添加运镜按钮的回调函数
     def add_row(self):
-        # 加载上传图标
-        upload_icon = Image.open("upload_image.png")
-        upload_icon = upload_icon.resize((90, 60))
-        upload_icon.thumbnail((90, 60))
-        upload_icon_image = ImageTk.PhotoImage(upload_icon)
+        current_index = len(self.program_entries)
 
-        # 使用 Label 显示上传图标，并作为上传按钮
-        icon_label = tk.Label(self.inner_frame, image=upload_icon_image, bg="#2F2F2F")
-        icon_label.image = upload_icon_image  # 保留引用防止被垃圾回收
-        icon_label.grid(row=self.row_count, column=0, padx=5, pady=5)
-
-        # 绑定点击事件触发上传图片
+        # 1. 上传图标按钮
+        icon_label = tk.Label(self.inner_frame, image=self.upload_icon_image, bg="#252525", width=self.column_config[0]["width"])
+        icon_label.image = self.upload_icon_image
+        icon_label.grid(row=self.row_count, column=0, padx=2, pady=2, sticky='ew')
         icon_label.bind("<Button-1>", lambda event, row=self.row_count, label=icon_label: self.upload_image(row, label))
 
-        # Vizrt指令 label
-        label_vizrt = tk.Label(self.inner_frame, text=f"P0{self.row_count}C01", bg="#2F2F2F", fg="white", width=10)
-        label_vizrt.grid(row=self.row_count, column=1, padx=5, pady=5)
+        # 2. Vizrt指令 label
+        label_vizrt = tk.Label(
+            self.inner_frame,
+            text=f"P0{self.row_count}C01",
+            bg="#252525",
+            fg="white",
+            font=Font(family="Microsoft YaHei", size=10),
+            width=self.column_config[1]["width"]
+        )
+        label_vizrt.grid(row=self.row_count, column=1, padx=0, pady=2, sticky='ew')
 
-        # 运镜名输入框
-        entry_program = tk.Entry(self.inner_frame, width=15)
-        entry_program.grid(row=self.row_count, column=2, padx=5, pady=5)
+        # 3. 运镜名输入框
+        entry_program = tk.Entry(
+            self.inner_frame,
+            font=Font(family="Microsoft YaHei", size=9),
+            highlightthickness=0,
+            bd=0,
+            bg="#303238",
+            fg="white",
+            width=self.column_config[2]["width"]
+        )
+        entry_program.grid(row=self.row_count, column=2, padx=2, pady=2, sticky='ew', ipady=4)
         self.program_entries.append(entry_program)
 
-        # 运行速度输入框
-        entry_speed = tk.Entry(self.inner_frame, width=10, fg='gray')
-        entry_speed.insert(0, "范围:1-50") if not entry_speed.get() else None
-        entry_speed.bind("<FocusIn>", lambda event: entry_speed.delete(0, tk.END) if entry_speed.get() == "范围:1-50" else None)
-        entry_speed.grid(row=self.row_count, column=3, padx=5, pady=5)
+        # 4. 运行速度输入框
+        entry_speed = tk.Entry(
+            self.inner_frame,
+            font=Font(family="Microsoft YaHei", size=9),
+            highlightthickness=0,
+            bd=0,
+            bg="#303238",
+            fg="white",
+            width=self.column_config[3]["width"]
+        )
+        entry_speed.grid(row=self.row_count, column=3, padx=2, pady=2, sticky='ew', ipady=4)
         self.speed_entries.append(entry_speed)
 
-        # 备注输入框
-        entry_note = tk.Entry(self.inner_frame, width=15)
-        entry_note.grid(row=self.row_count, column=4, padx=5, pady=5)
+        # 5. 备注输入框
+        entry_note = tk.Entry(
+            self.inner_frame,
+            font=Font(family="Microsoft YaHei", size=9),
+            highlightthickness=0,
+            bd=0,
+            bg="#303238",
+            fg="white",
+            width=self.column_config[4]["width"]
+        )
+        entry_note.grid(row=self.row_count, column=4, padx=2, pady=2, sticky='ew', ipady=4)
 
-        # 控制按钮的容器
-        control_frame = tk.Frame(self.inner_frame, bg="#2F2F2F")
-        control_frame.grid(row=self.row_count, column=5, padx=5, pady=5, sticky="ew")
+        # 6. 控制按钮的容器
+        control_frame = tk.Frame(self.inner_frame, bg="#252525", width=self.column_config[5]["width"])
+        control_frame.grid(row=self.row_count, column=5, padx=2, pady=2, sticky="ew")
 
-        # 回到起点按钮
-        btn_reset = tk.Button(control_frame, text="回到起点", command=lambda: self.print_program_and_speed(entry_program.get(), entry_speed.get()) if self.validate_speed(entry_speed.get()) else None)
-        btn_reset.pack(side=tk.LEFT, padx=3, pady=3)
+        # Load the reset button image
+        reset_icon = Image.open("assets/Reset.png")
+        reset_icon = reset_icon.resize((60, 32))
+        reset_icon_image = ImageTk.PhotoImage(reset_icon)
 
-        # 开始运行按钮
-        btn_start = tk.Button(control_frame, text="开始运行", command=lambda: self.print_speed(entry_speed.get()) if self.validate_speed(entry_speed.get()) else None)
-        btn_start.pack(side=tk.LEFT, padx=3, pady=3)
+        # Load the start button image
+        start_icon = Image.open("assets/Start.png")
+        start_icon = start_icon.resize((60, 32))
+        start_icon_image = ImageTk.PhotoImage(start_icon)
+
+        # 6.1 回到起点按钮
+        btn_reset = tk.Button(
+            control_frame,
+            image=reset_icon_image,
+            bg="#252525",
+            activebackground="#252525",
+            highlightthickness=0,
+            highlightbackground="#252525",
+            highlightcolor="#252525",
+            borderwidth=0,
+            relief=tk.FLAT,
+            command=lambda: self.print_program_and_speed(entry_program.get(), entry_speed.get())
+                           if self.validate_speed(entry_speed.get()) else None
+        )
+        btn_reset.image = reset_icon_image
+        btn_reset.pack(side=tk.LEFT, padx=1, pady=2, anchor='center')
+
+        # 6.2 开始运行按钮
+        btn_start = tk.Button(
+            control_frame,
+            image=start_icon_image,
+            bg="#252525",
+            activebackground="#252525",
+            highlightthickness=0,
+            highlightbackground="#252525",
+            highlightcolor="#252525",
+            borderwidth=0,
+            relief=tk.FLAT,
+            command=lambda: self.print_speed(entry_speed.get())
+                            if self.validate_speed(entry_speed.get()) else None
+        )
+        btn_start.image = start_icon_image
+        btn_start.pack(side=tk.LEFT, padx=1, pady=2, anchor='center')
+
+        # 7. 删除按钮
+        delete_icon = Image.open("assets/Delete.png")
+        delete_icon = delete_icon.resize((50, 32))
+        delete_icon_image = ImageTk.PhotoImage(delete_icon)
+
+        btn_delete = tk.Button(
+            self.inner_frame,
+            image=delete_icon_image,
+            bg="#252525",
+            activebackground="#252525",
+            highlightthickness=0,
+            highlightbackground="#252525",
+            highlightcolor="#252525",
+            borderwidth=0,
+            relief=tk.FLAT,
+            # command=lambda row=self.row_count: self.delete_row(row),
+            command=lambda i=current_index: self.delete_row(i),
+            width=self.column_config[6]["width"]
+        )
+        btn_delete.image = delete_icon_image
+        btn_delete.grid(row=self.row_count, column=6, padx=1, pady=2, sticky='ew')
 
         # 更新行号
         self.row_count += 1
 
+        # 配置每列的宽度
+        column_config = [
+            {"weight": 1, "minsize": 20},  # 截图列
+            {"weight": 1, "minsize": 10},  # Vizrt指令列
+            {"weight": 1, "minsize": 10},  # 运镜名列
+            {"weight": 1, "minsize": 10},  # 运行速度列
+            {"weight": 1, "minsize": 10},  # 备注列
+            {"weight": 1, "minsize": 20},  # 控制列
+            {"weight": 1, "minsize": 10},  # 删除列
+        ]
+        for index, config in enumerate(column_config):
+            self.inner_frame.grid_columnconfigure(index, weight=config["weight"], minsize=config["minsize"])
+
         # 更新滚动区域
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    # Home 按钮的回调函数
+    # TODO: Wait for the actual command to be implemented
+    def home(self):
+        raise NotImplementedError("Home button functionality not implemented yet")
+
+    def create_table_header(self):
+        headers = ["截图", "Vizrt指令", "运镜名", "运行速度", "备注", "控制", "删除"]
+        for index, header in enumerate(headers):
+            label = tk.Label(
+                self.inner_frame,
+                text=header,
+                bg="#252525",
+                fg="white",
+                font=('Microsoft YaHei', 10),
+                width=self.column_config[index]["width"]
+            )
+            label.grid(row=0, column=index, sticky='nsew')
+            self.inner_frame.grid_columnconfigure(index, weight=self.column_config[index]["weight"], minsize=self.column_config[index]["minsize"])
 
     def validate_speed(self, speed):
         try:
@@ -257,49 +517,11 @@ class App:
             if 1 <= speed <= 50:
                 return True
             else:
-                print("Speed must be between 1 and 50")
+                messagebox.showwarning("Invalid Speed", "Speed must be between 1 and 50")
                 return False
         except ValueError:
-            print("Invalid speed value")
+            messagebox.showwarning("Invalid Speed", "Invalid speed value")
             return False
-
-    def start_tcp_server(self):
-        if not self.server_active:
-            self.server_thread = TCPServerThread(self)
-            self.server_thread.start()
-            self.server_active = True
-            self.start_server_button.config(bg="#00FF00")  # 尝试在线程启动后立即更改颜色
-            self.root.update_idletasks()  # 使用 update_idletasks 尝试强制 GUI 刷新
-            print("TCP 服务器已启动")
-        else:
-            print("TCP 服务器已经在运行")
-
-    def pow_on(self):
-        # 添加日志记录
-        logging.info("Preparing to send commands: ZPOWER ON, EXECUTE gkamain")
-        # 打开机械臂
-        self.comm.command(f"ZPOWER ON")
-        self.comm.command(f"EXECUTE gkamain")
-
-    def pow_off(self):
-        # 添加日志记录
-        logging.info("Preparing to send command: ZPOWER OFF")
-        # 关闭机械臂
-        self.comm.command(f"ZPOWER OFF")
-
-    def pause(self):
-        # 添加日志记录
-        logging.info("Preparing to send command: SWITCH CS for pause or continue check")
-
-        retrun, srun = self.comm.command("SWITCH CS")
-        logging.info(f"Received response: {srun}")
-
-        claa='ON'
-        all_words_exist = all(word.lower() in srun.lower() for word in claa)
-        if all_words_exist:
-            self.comm.command("HOLD")
-        else:
-            self.comm.command("CONTINUE")
 
     def print_program_and_speed(self, program, speed):
         # 添加日志记录
@@ -315,73 +537,99 @@ class App:
         # 发送命令
         self.comm.command(f"PULSE 2666")
 
-    def update_on_air_status(self, is_connected):
-        color = 'red' if is_connected else 'gray'
-        self.status_canvas.itemconfig(self.on_air_indicator, fill=color)
+    def delete_row(self, row):
+        # 1) 删除UI
+        for widget in self.inner_frame.grid_slaves(row=row + 1):
+            widget.grid_forget()
+
+        # 2) 从列表里 pop
+        self.row_count -= 1
+        self.program_entries.pop(row)
+        self.speed_entries.pop(row)
+
+        # 3) 把后续行的所有控件往上挪
+        for r in range(row + 1, self.row_count + 1):
+            for widget in self.inner_frame.grid_slaves(row=r + 1):
+                widget.grid(row=r)
+
+        # 4) 重新给后续行的“删除”按钮更新 command
+        for r in range(row, self.row_count):
+            delete_buttons = [w for w in self.inner_frame.grid_slaves(row=r + 1, column=6) if isinstance(w, tk.Button)]
+            for btn in delete_buttons:
+                btn.config(command=lambda i=r: self.delete_row(i))
+
+        # 5) 更新 Vizrt 指令标签
+        for r in range(row, self.row_count):
+            vizrt_labels = [w for w in self.inner_frame.grid_slaves(row=r + 1, column=1) if isinstance(w, tk.Label)]
+            for lbl in vizrt_labels:
+                lbl.config(text=f"P0{r + 1}C01")
+
+        # 5) 再次配置列宽 + 刷新 scrollregion
+        for index, config in enumerate(self.column_config):
+            self.inner_frame.grid_columnconfigure(index, weight=config["weight"], minsize=config["minsize"])
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
     def compare_p01c01_content(self):
         # 获取每行 P01C01 程序名中的内容并与 TCP 接收的数据对比
         local_data = ""
-        if self.received_data=='P01C01T':
+        if self.received_data == 'P01C01T':
             program_1 = self.program_entries[0].get()
             speed_1 = self.speed_entries[0].get()
-            self.comm.command(f"SPEED "+speed_1 )
-            self.comm.command(f"EXECUTE "+program_1)
-        if self.received_data=='P02C01T':
+            self.comm.command(f"SPEED " + speed_1)
+            self.comm.command(f"EXECUTE " + program_1)
+        if self.received_data == 'P02C01T':
             program_2 = self.program_entries[1].get()
             speed_2 = self.speed_entries[1].get()
-            self.comm.command(f"SPEED "+speed_2 )
-            self.comm.command(f"EXECUTE "+program_2)
-        if self.received_data=='P03C01T':
+            self.comm.command(f"SPEED " + speed_2)
+            self.comm.command(f"EXECUTE " + program_2)
+        if self.received_data == 'P03C01T':
             program_3 = self.program_entries[2].get()
             speed_3 = self.speed_entries[2].get()
-            self.comm.command(f"SPEED "+speed_3 )
-            self.comm.command(f"EXECUTE "+program_3)
-        if self.received_data=='P04C01T':
+            self.comm.command(f"SPEED " + speed_3)
+            self.comm.command(f"EXECUTE " + program_3)
+        if self.received_data == 'P04C01T':
             program_4 = self.program_entries[3].get()
             speed_4 = self.speed_entries[3].get()
-            self.comm.command(f"SPEED "+speed_4 )
-            self.comm.command(f"EXECUTE "+program_4)
-        if self.received_data=='P05C01T':
+            self.comm.command(f"SPEED " + speed_4)
+            self.comm.command(f"EXECUTE " + program_4)
+        if self.received_data == 'P05C01T':
             program_5 = self.program_entries[4].get()
             speed_5 = self.speed_entries[4].get()
-            self.comm.command(f"SPEED "+speed_5 )
-            self.comm.command(f"EXECUTE "+program_5)
-        if self.received_data=='P06C01T':
+            self.comm.command(f"SPEED " + speed_5)
+            self.comm.command(f"EXECUTE " + program_5)
+        if self.received_data == 'P06C01T':
             program_6 = self.program_entries[5].get()
             speed_6 = self.speed_entries[5].get()
-            self.comm.command(f"SPEED "+speed_6 )
-            self.comm.command(f"EXECUTE "+program_6)
-        if self.received_data=='P07C01T':
+            self.comm.command(f"SPEED " + speed_6)
+            self.comm.command(f"EXECUTE " + program_6)
+        if self.received_data == 'P07C01T':
             program_7 = self.program_entries[6].get()
             speed_7 = self.speed_entries[6].get()
-            self.comm.command(f"SPEED "+speed_7 )
-            self.comm.command(f"EXECUTE "+program_7)
-        if self.received_data=='P08C01T':
+            self.comm.command(f"SPEED " + speed_7)
+            self.comm.command(f"EXECUTE " + program_7)
+        if self.received_data == 'P08C01T':
             program_8 = self.program_entries[7].get()
             speed_8 = self.speed_entries[7].get()
-            self.comm.command(f"SPEED "+speed_8 )
-            self.comm.command(f"EXECUTE "+program_8)
-        if self.received_data=='P09C01T':
+            self.comm.command(f"SPEED " + speed_8)
+            self.comm.command(f"EXECUTE " + program_8)
+        if self.received_data == 'P09C01T':
             program_9 = self.program_entries[8].get()
             speed_9 = self.speed_entries[8].get()
-            self.comm.command(f"SPEED "+speed_9 )
-            self.comm.command(f"EXECUTE "+program_9)
-        if self.received_data=='P10C01T':
+            self.comm.command(f"SPEED " + speed_9)
+            self.comm.command(f"EXECUTE " + program_9)
+        if self.received_data == 'P10C01T':
             program_10 = self.program_entries[9].get()
             speed_10 = self.speed_entries[9].get()
-            self.comm.command(f"SPEED "+speed_10 )
-            self.comm.command(f"EXECUTE "+program_10)
-        if self.received_data=='P11C01T':
+            self.comm.command(f"SPEED " + speed_10)
+            self.comm.command(f"EXECUTE " + program_10)
+        if self.received_data == 'P11C01T':
             program_11 = self.program_entries[10].get()
             speed_11 = self.speed_entries[10].get()
-            self.comm.command(f"SPEED "+speed_11 )
-            self.comm.command(f"EXECUTE "+program_11)
-
-        if self.received_data=='P99C99T':
+            self.comm.command(f"SPEED " + speed_11)
+            self.comm.command(f"EXECUTE " + program_11)
+        if self.received_data == 'P99C99T':
 
             self.comm.command(f"PULSE 2666")
-
         else:
             print("尚未接收到 TCP 数据")
 
@@ -398,15 +646,14 @@ class App:
             for widget in self.inner_frame.winfo_children():
                 widget.destroy()
 
-            # 重新添加表头
-            self.create_table_header()
+            self.create_table_header()  # 重新创建表头
             self.row_count = 1  # 重置行号
 
             # 加载每一行数据
             for row_data in data:
                 self.add_row()  # 添加新行
 
-                # 设置截图（这里假设截图占位图是 Label）
+                # 设置截图
                 screenshot_label = self.inner_frame.grid_slaves(row=self.row_count - 1, column=0)[0]
                 screenshot_path = row_data.get("screenshot", "未上传")
                 if screenshot_path != "未上传":
@@ -482,23 +729,45 @@ class App:
         print("数据已保存到 program_data.json")
 
     def on_close(self):
-        # 窗口关闭时保存数据
-        self.save_data()
+        # 提示用户是否保存数据
+        if messagebox.askyesno("保存数据", "是否要保存当前参数？"):
+            self.save_data()
         self.root.destroy()
 
     def upload_image(self, row, label):
-        # 弹出文件选择对话框
-        filename = filedialog.askopenfilename(title="选择图片", filetypes=(("PNG files", "*.png"), ("JPEG files", "*.jpg"), ("All files", "*.*")))
+        if getattr(self, 'locked', False):
+             return  # Do nothing if the screen is locked
+
+        filename = filedialog.askopenfilename(
+            title="选择图片",
+            filetypes=(("PNG files", "*.png"), ("JPEG files", "*.jpg"), ("All files", "*.*"))
+        )
         if filename:
             # 加载选择的图片并调整为缩略图
             img = Image.open(filename)
             img.thumbnail((90, 60))
             photo_img = ImageTk.PhotoImage(img)
-    
+
             # 更新 Label 的图像
             label.config(image=photo_img)
             label.image = photo_img  # 保留引用防止垃圾回收
             label.image_path = filename  # 保存图片路径
+
+    def toggle_lock_screen(self):
+        self.locked = not getattr(self, 'locked', False)
+        state = tk.DISABLED if self.locked else tk.NORMAL
+        self.set_widgets_state(self.root, state)
+
+    def set_widgets_state(self, widget, state):
+        skip_widgets = (self.lock_button,)
+        for child in widget.winfo_children():
+            # if child not in skip_widgets:
+            if child not in skip_widgets and not isinstance(child, tk.Label):
+                try:
+                    child.config(state=state)
+                except tk.TclError:
+                    pass
+            self.set_widgets_state(child, state)
 
 # TODO: 用于模拟通信的类, 最后记得删除
 class MockComm:
@@ -508,20 +777,26 @@ class MockComm:
             "ZPOWER OFF": "Machine powered off",
             "SPEED": lambda speed: f"Speed set to {speed}",
             "EXECUTE": lambda program: f"Executing {program}",
+            "EXECUTE gkamain": "Executing gkamain",
             "PULSE 2666": "Pulse command received",
-            "SWITCH CS": "ON AIR"
+            "SWITCH CS": "ON AIR",
+            "HOLD": "Holding"
         }
 
     def command(self, cmd):
         if cmd in self.commands:
-            print(f"Command: {cmd}")
+            print(f"Robotic arm command: {cmd}")
             if cmd == "SWITCH CS":
                 return True, self.commands[cmd]
         else:
             print(f"Command not found: {cmd}")
 
 
-if __name__ == "__main__":
+
+def main():
     root = tk.Tk()
     app = App(root)
     root.mainloop()
+
+if __name__ == "__main__":
+    main()
