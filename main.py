@@ -34,12 +34,12 @@ class TCPServerThread(threading.Thread):
         self.server_socket.bind(('localhost', 8888))
         self.server_socket.listen(5)
         logging.info("TCP server started and waiting for connections...")
-        print("TCP 服务器已启动，等待连接...")
+        self.app.update_vizrt_button("listening")
 
         while True:
             client_socket, addr = self.server_socket.accept()
             logging.info(f"Connection established from: {addr}")
-            print(f"连接来自: {addr}")
+            self.app.update_vizrt_button("connected")
 
             try:
                 while True:
@@ -48,28 +48,24 @@ class TCPServerThread(threading.Thread):
                         break
 
                     logging.info(f"Received command: {data}")
-                    print(f"接收到数据: {data}")
-
-                    # 处理数据
                     data_text = data[:7]
                     self.app.received_data = data_text
                     self.app.compare_p01c01_content()  # 自动对比 P01C01 内容
             except ConnectionResetError:
                 logging.warning(f"Connection forcibly closed by remote host: {addr}")
-                print(f"连接被远程主机强制关闭: {addr}")
             finally:
-                client_socket.close()  # 确保在退出循环时关闭客户端socket
+                client_socket.close()
                 logging.info(f"Connection closed: {addr}")
-                print("客户端连接已关闭，等待新的连接...")
+                self.app.update_vizrt_button("listening")
 
 class App:
     def __init__(self, root):
-        self.win_width = 640
+        self.win_width = 660
         self.win_height = 800
         self.root = root
         self.root.title("Auto Play")
         self.root.geometry(f"{self.win_width}x{self.win_height}")
-        # self.root.resizable(False, False)
+        self.root.resizable(False, False)
         self.root.configure(bg="#252525")
 
         self.server_active = False  # 跟踪服务端是否活跃
@@ -86,29 +82,39 @@ class App:
         self.top_image_frame = tk.Frame(self.root, bg="#252525")
         self.top_image_frame.grid(row=0, column=0, sticky="ew")
 
-        # 创建 Label 来显示顶部图片
-        self.header_image = PhotoImage(file="assets/header_image_w640.png")  # 加载图片
+        # Load and resize the header image to the window width
+        header_image_path = "assets/header_image.png"
+        header_image = Image.open(header_image_path)
+        header_image = header_image.resize(
+            (self.win_width, int(header_image.height * (self.win_width / header_image.width))))
+        self.header_image = ImageTk.PhotoImage(header_image)
+
+        # Create Label to display the header image
         self.header_label = Label(self.top_image_frame, image=self.header_image, borderwidth=0)
         self.header_label.grid(row=0, column=0, sticky="ew")
 
         # 2.创建顶部控件的 Frame
-        top_frame = tk.Frame(self.root, bg="#252525")
-        top_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=20)
+        self.top_frame = tk.Frame(self.root, bg="#252525")
+        self.top_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=20)
         button_width = 8   # 按钮宽度设置为8个字符宽
         button_height = 2  # 按钮高度设置为2个字符高
 
         # 2.1. Vizrt 按钮(启动 TCP 服务器)
-        self.vizrt_on_icon = Image.open("assets/Vizrt-T.png")
+        self.vizrt_on_icon = Image.open("assets/Vizrt-G.png")
         self.vizrt_on_icon = self.vizrt_on_icon.resize((button_width * 15, button_height * 25))
         self.vizrt_on_icon_image = ImageTk.PhotoImage(self.vizrt_on_icon)
 
-        self.vizrt_off_icon = Image.open("assets/Vizrt-F.png")
+        self.vizrt_off_icon = Image.open("assets/Vizrt-W.png")
         self.vizrt_off_icon = self.vizrt_off_icon.resize((button_width * 15, button_height * 25))
         self.vizrt_off_icon_image = ImageTk.PhotoImage(self.vizrt_off_icon)
 
+        self.vizrt_listening_icon = Image.open("assets/Vizrt-R.png")
+        self.vizrt_listening_icon = self.vizrt_listening_icon.resize((button_width * 15, button_height * 25))
+        self.vizrt_listening_icon_image = ImageTk.PhotoImage(self.vizrt_listening_icon)
+
         # button of Vizrt
         self.btn_vizrt = tk.Button(
-            top_frame,
+            self.top_frame,
             image=self.vizrt_off_icon_image,
             bg="#252525",
             activebackground="#252525",
@@ -123,17 +129,17 @@ class App:
         self.btn_vizrt.grid(row=0, column=0)
 
         # 2.2. ON AIR 按钮
-        self.on_air_on_icon = Image.open("assets/OnAir-T.png")
+        self.on_air_on_icon = Image.open("assets/OnAir-R.png")
         self.on_air_on_icon = self.on_air_on_icon.resize((button_width * 15, button_height * 25))
         self.on_air_on_icon_image = ImageTk.PhotoImage(self.on_air_on_icon)
 
-        self.on_air_off_icon = Image.open("assets/OnAir-F.png")
+        self.on_air_off_icon = Image.open("assets/OnAir-W.png")
         self.on_air_off_icon = self.on_air_off_icon.resize((button_width * 15, button_height * 25))
         self.on_air_off_icon_image = ImageTk.PhotoImage(self.on_air_off_icon)
 
         # button of ON AIR
         self.btn_on_air = tk.Button(
-            top_frame,
+            self.top_frame,
             image=self.on_air_off_icon_image,
             bg="#252525",
             activebackground="#252525",
@@ -154,7 +160,7 @@ class App:
 
         # button of Pause
         self.btn_pause = tk.Button(
-            top_frame,
+            self.top_frame,
             image=pause_icon_image,
             bg="#252525",
             activebackground="#252525",
@@ -175,7 +181,7 @@ class App:
 
         # button of Add
         self.add_button = tk.Button(
-            top_frame,
+            self.top_frame,
             image=add_icon_image,
             bg="#252525",
             activebackground="#252525",
@@ -196,7 +202,7 @@ class App:
 
         # button of Home
         self.home_button = tk.Button(
-            top_frame,
+            self.top_frame,
             image=home_icon_image,
             bg="#252525",
             activebackground="#252525",
@@ -212,35 +218,48 @@ class App:
 
         # 调整列权重以实现居中
         for i in range(5):
-            top_frame.grid_columnconfigure(i, weight=1)
-        top_frame.grid_columnconfigure(2, weight=2)
+            self.top_frame.grid_columnconfigure(i, weight=1)
+        self.top_frame.grid_columnconfigure(2, weight=2)
 
-        # 3. 创建一个 Frame 用于放置动态添加的行
+        # 3. Create a frame to hold the canvas and scrollbar
         self.program_frame = tk.Frame(root, bg="#252525")
         self.program_frame.grid(row=2, column=0, columnspan=5, sticky="ew")
 
-        # 创建一个 Canvas 用于滚动
+        # Create a canvas
         self.canvas = tk.Canvas(
             self.program_frame,
-            width=self.win_width - 10,
-            height=self.win_height,
+            width=self.win_width-20,
             bg="#252525",
+            height=525,
             borderwidth=0,
             highlightthickness=0
         )
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # 创建一个 Scrollbar
-        self.scrollbar = ttk.Scrollbar(self.program_frame, orient="vertical", command=self.canvas.yview)
+        # Create a scrollbar
+        style = ttk.Style()   # Create a style
+        style.theme_use('default')
+
+        # Customize the scrollbar background and slider (thumb) background
+        style.configure("Vertical.TScrollbar", background="#252525", troughcolor="#252525")
+        style.map("Vertical.TScrollbar",
+                  background=[('active', '#404040'), ('!active', '#252525')],
+                  troughcolor=[('active', '#404040'), ('!active', '#252525')])
+        self.scrollbar = ttk.Scrollbar(self.program_frame,
+                                       orient="vertical",
+                                       command=self.canvas.yview,
+                                        style="Vertical.TScrollbar"
+                                       )
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # 配置 Canvas
+        # Configure the canvas to use the scrollbar
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         self.canvas.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
 
-        # 创建一个 Frame 用于放置内容
+        # Create a frame inside the canvas(program rows will be placed inside this frame)
         self.inner_frame = tk.Frame(self.canvas, bg="#252525")
         self.canvas.create_window((0, 0), window=self.inner_frame, anchor="nw")
+
 
         # 配置列宽
         self.column_config = [
@@ -257,16 +276,27 @@ class App:
         self.create_table_header()
 
         # 4. 创建底部锁定按钮
+        # Load the lock and unlock icons
+        self.lock_icon = Image.open("assets/Lock.png")
+        self.lock_icon = self.lock_icon.resize((30, 30))
+        self.lock_icon_image = ImageTk.PhotoImage(self.lock_icon)
+
+        self.unlock_icon = Image.open("assets/Unlock.png")
+        self.unlock_icon = self.unlock_icon.resize((30, 30))
+        self.unlock_icon_image = ImageTk.PhotoImage(self.unlock_icon)
+
         # Create the lock button
         self.lock_button = tk.Button(
             self.root,
-            text="Lock",
+            image=self.unlock_icon_image,
             command=self.toggle_lock_screen,
             bg="#252525",
-            fg="white",
-            font=Font(family="Microsoft YaHei", size=8),
-            width=4,
-            height=2
+            activebackground="#252525",
+            highlightthickness=0,
+            highlightbackground="#252525",
+            highlightcolor="#252525",
+            borderwidth=0,
+            relief=tk.FLAT,
         )
         self.lock_button.place(relx=0, rely=1, anchor='sw')
 
@@ -309,11 +339,19 @@ class App:
             self.server_thread = TCPServerThread(self)
             self.server_thread.start()
             self.server_active = True
-            self.btn_vizrt.config(image=self.vizrt_on_icon_image)
+            self.update_vizrt_button("listening")
             self.root.update_idletasks()  # 强制 GUI 刷新
             print("TCP 服务器已启动")
         else:
             print("TCP 服务器已经在运行")
+
+    def update_vizrt_button(self, state):
+        if state == "listening":
+            self.btn_vizrt.config(image=self.vizrt_listening_icon_image)
+        elif state == "connected":
+            self.btn_vizrt.config(image=self.vizrt_on_icon_image)
+        else:
+            self.btn_vizrt.config(image=self.vizrt_off_icon_image)
 
     def update_on_air_status(self):
         if self.on_air:
@@ -729,6 +767,16 @@ class App:
         print("数据已保存到 program_data.json")
 
     def on_close(self):
+        top_image_frame_width = self.top_image_frame.winfo_width()
+        top_image_frame_height = self.top_image_frame.winfo_height()
+        top_frame_width = self.top_frame.winfo_width()
+        top_frame_height = self.top_frame.winfo_height()
+        print(f"Top image frame size: {top_image_frame_width}x{top_image_frame_height}")
+        print(f"Top frame size: {top_frame_width}x{top_frame_height}")
+
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        print(f"Current window size: {width}x{height}")
         # 提示用户是否保存数据
         if messagebox.askyesno("保存数据", "是否要保存当前参数？"):
             self.save_data()
@@ -758,8 +806,13 @@ class App:
         state = tk.DISABLED if self.locked else tk.NORMAL
         self.set_widgets_state(self.root, state)
 
+        if self.locked:
+            self.lock_button.config(image=self.lock_icon_image)
+        else:
+            self.lock_button.config(image=self.unlock_icon_image)
+
     def set_widgets_state(self, widget, state):
-        skip_widgets = (self.lock_button,)
+        skip_widgets = (self.lock_button,self.btn_vizrt,self.btn_on_air,self.btn_pause,self.add_button,self.home_button)
         for child in widget.winfo_children():
             # if child not in skip_widgets:
             if child not in skip_widgets and not isinstance(child, tk.Label):
