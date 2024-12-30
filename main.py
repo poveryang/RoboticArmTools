@@ -516,7 +516,7 @@ class App:
             highlightcolor="#252525",
             borderwidth=0,
             relief=tk.FLAT,
-            command=lambda i=current_index: self.delete_row(i),
+            command=lambda i=current_index: self.clear_row(i),
             width=self.column_config[6]["width"]
         )
         btn_delete.image = delete_icon_image
@@ -846,6 +846,23 @@ class App:
             program = program_entry.get()
             speed = speed_entry.get()
             self.print_program_and_speed(program, speed)
+
+    def clear_row(self, row):
+        # Clear the program entry
+        self.program_entries[row].delete(0, tk.END)
+
+        # Clear the speed entry
+        self.speed_entries[row].delete(0, tk.END)
+
+        # Clear the note entry
+        note_entry = self.inner_frame.grid_slaves(row=row + 1, column=4)[0]
+        note_entry.delete(0, tk.END)
+
+        # Clear the screenshot label
+        screenshot_label = self.inner_frame.grid_slaves(row=row + 1, column=0)[0]
+        screenshot_label.config(image=self.upload_icon_image)
+        screenshot_label.image = self.upload_icon_image
+        screenshot_label.image_path = "未上传"
 
 # TODO: 用于模拟通信的类, 最后记得删除
 class MockComm:
