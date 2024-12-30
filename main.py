@@ -488,6 +488,7 @@ class App:
         # 6.1 回到起点按钮
         btn_reset = tk.Button(
             control_frame,
+            text='Reset',  # Set the text property
             image=reset_icon_image,
             bg="#252525",
             activebackground="#252525",
@@ -811,11 +812,13 @@ class App:
             self.lock_button.config(image=self.unlock_icon_image)
 
     def set_widgets_state(self, widget, state):
-        skip_widgets = (self.lock_button,self.btn_vizrt,self.btn_on_air,self.btn_pause,self.add_button,self.home_button)
+        skip_widgets = (
+        self.lock_button, self.btn_vizrt, self.btn_on_air, self.btn_pause, self.add_button, self.home_button)
         for child in widget.winfo_children():
-            # if child not in skip_widgets:
             if child not in skip_widgets and not isinstance(child, tk.Label):
                 try:
+                    if isinstance(child, tk.Button) and child.cget('text') == 'Reset':
+                        continue  # Skip the reset buttons
                     child.config(state=state)
                 except tk.TclError:
                     pass
