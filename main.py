@@ -106,20 +106,20 @@ class App:
         # 2.创建顶部控件的 Frame
         self.top_frame = tk.Frame(self.root, bg="#252525")
         self.top_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=20)
-        button_width = 8   # 按钮宽度设置为8个字符宽
-        button_height = 2  # 按钮高度设置为2个字符高
+        button_width = 120   # 按钮宽度设置为8个字符宽
+        button_height = 50  # 按钮高度设置为2个字符高
 
         # 2.1. Vizrt 按钮(启动 TCP 服务器)
         self.vizrt_on_icon = Image.open("assets/Vizrt-G.png")
-        self.vizrt_on_icon = self.vizrt_on_icon.resize((button_width * 15, button_height * 25))
+        self.vizrt_on_icon = self.vizrt_on_icon.resize((button_width, button_height))
         self.vizrt_on_icon_image = ImageTk.PhotoImage(self.vizrt_on_icon)
 
         self.vizrt_off_icon = Image.open("assets/Vizrt-W.png")
-        self.vizrt_off_icon = self.vizrt_off_icon.resize((button_width * 15, button_height * 25))
+        self.vizrt_off_icon = self.vizrt_off_icon.resize((button_width, button_height))
         self.vizrt_off_icon_image = ImageTk.PhotoImage(self.vizrt_off_icon)
 
         self.vizrt_listening_icon = Image.open("assets/Vizrt-R.png")
-        self.vizrt_listening_icon = self.vizrt_listening_icon.resize((button_width * 15, button_height * 25))
+        self.vizrt_listening_icon = self.vizrt_listening_icon.resize((button_width, button_height))
         self.vizrt_listening_icon_image = ImageTk.PhotoImage(self.vizrt_listening_icon)
 
         # button of Vizrt
@@ -140,11 +140,11 @@ class App:
 
         # 2.2. ON AIR 按钮
         self.on_air_on_icon = Image.open("assets/OnAir-R.png")
-        self.on_air_on_icon = self.on_air_on_icon.resize((button_width * 15, button_height * 25))
+        self.on_air_on_icon = self.on_air_on_icon.resize((button_width, button_height))
         self.on_air_on_icon_image = ImageTk.PhotoImage(self.on_air_on_icon)
 
         self.on_air_off_icon = Image.open("assets/OnAir-W.png")
-        self.on_air_off_icon = self.on_air_off_icon.resize((button_width * 15, button_height * 25))
+        self.on_air_off_icon = self.on_air_off_icon.resize((button_width, button_height))
         self.on_air_off_icon_image = ImageTk.PhotoImage(self.on_air_off_icon)
 
         # button of ON AIR
@@ -191,7 +191,7 @@ class App:
 
         # 2.4. 添加运镜按钮
         add_icon = Image.open("assets/Add.png")
-        add_icon = add_icon.resize((button_width * 15, button_height * 25))
+        add_icon = add_icon.resize((button_width, button_height))
         add_icon_image = ImageTk.PhotoImage(add_icon)
 
         # button of Add
@@ -212,7 +212,7 @@ class App:
 
         # 2.5. Home 按钮
         home_icon = Image.open("assets/Home.png")
-        home_icon = home_icon.resize((button_width * 15, button_height * 25))
+        home_icon = home_icon.resize((button_width, button_height))
         home_icon_image = ImageTk.PhotoImage(home_icon)
 
         # button of Home
@@ -233,7 +233,7 @@ class App:
 
         # 2.6. 统一开始运行按钮
         start_all_icon = Image.open("assets/Start-All.png")
-        start_all_icon = start_all_icon.resize((button_width * 15, button_height * 25))
+        start_all_icon = start_all_icon.resize((button_width, button_height))
         start_all_icon_image = ImageTk.PhotoImage(start_all_icon)
 
         # button of Start All
@@ -301,12 +301,12 @@ class App:
 
         # 配置列宽
         self.column_config = [
-            {"weight": 1, "minsize": 10, "width": 10},  # 截图列
-            {"weight": 1, "minsize": 8, "width": 8},    # Vizrt指令列
-            {"weight": 1, "minsize": 10, "width": 13},  # 运镜名列
-            {"weight": 1, "minsize": 10, "width": 8},   # 运行速度列
-            {"weight": 1, "minsize": 10, "width": 13},  # 备注列
-            {"weight": 1, "minsize": 10, "width": 13},  # 控制列
+            {"weight": 1, "minsize": 10, "width": 13},  # 截图列
+            {"weight": 1, "minsize": 8, "width": 10},    # Vizrt指令列
+            {"weight": 1, "minsize": 10, "width": 15},  # 运镜名列
+            {"weight": 1, "minsize": 10, "width": 10},   # 运行速度列
+            {"weight": 1, "minsize": 10, "width": 15},  # 备注列
+            {"weight": 1, "minsize": 10, "width": 8},  # 控制列
             {"weight": 1, "minsize": 5, "width": 5},    # 删除列
         ]
 
@@ -535,17 +535,7 @@ class App:
         # 更新行号
         self.row_count += 1
 
-        # 配置每列的宽度
-        column_config = [
-            {"weight": 1, "minsize": 20},  # 截图列
-            {"weight": 1, "minsize": 10},  # Vizrt指令列
-            {"weight": 1, "minsize": 10},  # 运镜名列
-            {"weight": 1, "minsize": 10},  # 运行速度列
-            {"weight": 1, "minsize": 10},  # 备注列
-            {"weight": 1, "minsize": 20},  # 控制列
-            {"weight": 1, "minsize": 10},  # 删除列
-        ]
-        for index, config in enumerate(column_config):
+        for index, config in enumerate(self.column_config):
             self.inner_frame.grid_columnconfigure(index, weight=config["weight"], minsize=config["minsize"])
 
         # 更新滚动区域
@@ -557,7 +547,7 @@ class App:
         raise NotImplementedError("Home button functionality not implemented yet")
 
     def create_table_header(self):
-        headers = ["截图", "Vizrt指令", "运镜名", "运行速度", "备注", "控制", "删除"]
+        headers = ["截图", "Vizrt指令", "运镜名", "运行速度", "备注", "控制", "清除"]
         for index, header in enumerate(headers):
             label = tk.Label(
                 self.inner_frame,
@@ -780,12 +770,9 @@ class App:
         top_image_frame_height = self.top_image_frame.winfo_height()
         top_frame_width = self.top_frame.winfo_width()
         top_frame_height = self.top_frame.winfo_height()
-        print(f"Top image frame size: {top_image_frame_width}x{top_image_frame_height}")
-        print(f"Top frame size: {top_frame_width}x{top_frame_height}")
 
         width = self.root.winfo_width()
         height = self.root.winfo_height()
-        print(f"Current window size: {width}x{height}")
         # 提示用户是否保存数据
         if messagebox.askyesno("保存数据", "是否要保存当前参数？"):
             self.save_data()
