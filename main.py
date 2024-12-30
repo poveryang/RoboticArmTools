@@ -226,6 +226,27 @@ class App:
         self.home_button.image = home_icon_image
         self.home_button.grid(row=0, column=4)
 
+        # 2.6. 统一开始运行按钮
+        start_all_icon = Image.open("assets/Start-All.png")
+        start_all_icon = start_all_icon.resize((button_width * 15, button_height * 25))
+        start_all_icon_image = ImageTk.PhotoImage(start_all_icon)
+
+        # button of Start All
+        self.start_all_button = tk.Button(
+            self.top_frame,
+            image=start_all_icon_image,
+            bg="#252525",
+            activebackground="#252525",
+            highlightthickness=0,
+            highlightbackground="#252525",
+            highlightcolor="#252525",
+            borderwidth=0,
+            relief=tk.FLAT,
+            command=self.start_all
+        )
+        self.start_all_button.image = start_all_icon_image
+        self.start_all_button.grid(row=0, column=5)
+
         # 调整列权重以实现居中
         for i in range(5):
             self.top_frame.grid_columnconfigure(i, weight=1)
@@ -464,11 +485,6 @@ class App:
         reset_icon = reset_icon.resize((60, 32))
         reset_icon_image = ImageTk.PhotoImage(reset_icon)
 
-        # Load the start button image
-        start_icon = Image.open("assets/Start.png")
-        start_icon = start_icon.resize((60, 32))
-        start_icon_image = ImageTk.PhotoImage(start_icon)
-
         # 6.1 回到起点按钮
         btn_reset = tk.Button(
             control_frame,
@@ -485,22 +501,6 @@ class App:
         btn_reset.image = reset_icon_image
         btn_reset.pack(side=tk.LEFT, padx=1, pady=2, anchor='center')
 
-        # 6.2 开始运行按钮
-        btn_start = tk.Button(
-            control_frame,
-            image=start_icon_image,
-            bg="#252525",
-            activebackground="#252525",
-            highlightthickness=0,
-            highlightbackground="#252525",
-            highlightcolor="#252525",
-            borderwidth=0,
-            relief=tk.FLAT,
-            command=lambda: self.print_speed(entry_speed.get())
-        )
-        btn_start.image = start_icon_image
-        btn_start.pack(side=tk.LEFT, padx=1, pady=2, anchor='center')
-
         # 7. 删除按钮
         delete_icon = Image.open("assets/Delete.png")
         delete_icon = delete_icon.resize((50, 32))
@@ -516,7 +516,6 @@ class App:
             highlightcolor="#252525",
             borderwidth=0,
             relief=tk.FLAT,
-            # command=lambda row=self.row_count: self.delete_row(row),
             command=lambda i=current_index: self.delete_row(i),
             width=self.column_config[6]["width"]
         )
