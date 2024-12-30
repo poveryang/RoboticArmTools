@@ -270,6 +270,8 @@ class App:
         self.inner_frame = tk.Frame(self.canvas, bg="#252525")
         self.canvas.create_window((0, 0), window=self.inner_frame, anchor="nw")
 
+        # Register the validation function
+        self.validate_speed_cmd = root.register(self.validate_speed_input)
 
         # 配置列宽
         self.column_config = [
@@ -426,7 +428,7 @@ class App:
         entry_program.grid(row=self.row_count, column=2, padx=2, pady=2, sticky='ew', ipady=4)
         self.program_entries.append(entry_program)
 
-        # 4. 运行速度输入框
+        # 4. 运行速度输入框 with validation
         entry_speed = tk.Entry(
             self.inner_frame,
             font=Font(family="Microsoft YaHei", size=9),
@@ -434,7 +436,9 @@ class App:
             bd=0,
             bg="#303238",
             fg="white",
-            width=self.column_config[3]["width"]
+            width=self.column_config[3]["width"],
+            validate="key",
+            validatecommand=(self.validate_speed_cmd, '%P', '%W')
         )
         entry_speed.grid(row=self.row_count, column=3, padx=2, pady=2, sticky='ew', ipady=4)
         self.speed_entries.append(entry_speed)
@@ -477,7 +481,6 @@ class App:
             borderwidth=0,
             relief=tk.FLAT,
             command=lambda: self.print_program_and_speed(entry_program.get(), entry_speed.get())
-                           if self.validate_speed(entry_speed.get()) else None
         )
         btn_reset.image = reset_icon_image
         btn_reset.pack(side=tk.LEFT, padx=1, pady=2, anchor='center')
@@ -494,7 +497,6 @@ class App:
             borderwidth=0,
             relief=tk.FLAT,
             command=lambda: self.print_speed(entry_speed.get())
-                            if self.validate_speed(entry_speed.get()) else None
         )
         btn_start.image = start_icon_image
         btn_start.pack(side=tk.LEFT, padx=1, pady=2, anchor='center')
@@ -558,18 +560,6 @@ class App:
             )
             label.grid(row=0, column=index, sticky='nsew')
             self.inner_frame.grid_columnconfigure(index, weight=self.column_config[index]["weight"], minsize=self.column_config[index]["minsize"])
-
-    def validate_speed(self, speed):
-        try:
-            speed = int(speed)
-            if 1 <= speed <= 50:
-                return True
-            else:
-                messagebox.showwarning("Invalid Speed", "Speed must be between 1 and 50")
-                return False
-        except ValueError:
-            messagebox.showwarning("Invalid Speed", "Invalid speed value")
-            return False
 
     def print_program_and_speed(self, program, speed):
         # 添加日志记录
@@ -831,6 +821,32 @@ class App:
                 except tk.TclError:
                     pass
             self.set_widgets_state(child, state)
+
+    def validate_speed_input(self, new_value, widget_name):
+        entry = self.root.nametowidget(widget_name)
+        if new_value.isdigit():
+            value = int(new_value)
+            if value < 1:
+                self.root.after(0, lambda: self.set_entry_value(entry, '1'))
+                return False
+            elif value > 50:
+                self.root.after(0, lambda: self.set_entry_value(entry, '50'))
+                return False
+            return True
+        elif new_value == "":
+            return True
+        else:
+            return False
+
+    def set_entry_value(self, entry, value):
+        entry.delete(0, tk.END)
+        entry.insert(0, value)
+
+    def start_all(self):
+        for program_entry, speed_entry in zip(self.program_entries, self.speed_entries):
+            program = program_entry.get()
+            speed = speed_entry.get()
+            self.print_program_and_speed(program, speed)
 
 # TODO: 用于模拟通信的类, 最后记得删除
 class MockComm:
