@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
+import os
+from datetime import datetime
 # import clr
 # clr.AddReference("krcc64")
 # import KRcc
@@ -12,13 +14,21 @@ from tkinter.font import Font
 
 from PIL import Image, ImageTk
 
+# Get the current date to use in the log file name
+current_date = datetime.now().strftime('%Y-%m-%d')
+log_filename = f'./logs/robotic_arm_{current_date}.log'
+
+# Check if the log file already exists
+filemode = 'a' if os.path.exists(log_filename) else 'w'
+
+
 # Initialize logging
 logging.basicConfig(
-    filename='robotic_arm.log',  # Log file name
+    filename=log_filename,       # Log file name
     level=logging.INFO,          # Log level
     format='%(asctime)s - %(levelname)s - %(message)s',  # Log format: timestamp - log level - message
     encoding='utf-8',            # Specify log file encoding as utf-8
-    filemode='w'                 # Open the log file in write mode to overwrite existing content
+    filemode=filemode            # Open the log file in write mode to overwrite existing content
 )
 
 class TCPServerThread(threading.Thread):
