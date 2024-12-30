@@ -164,14 +164,19 @@ class App:
         self.btn_on_air.grid(row=0, column=1)
 
         # 2.3. Pause 按钮
-        pause_icon = Image.open("assets/Pause.png")
-        pause_icon = pause_icon.resize((button_width * 15, button_height * 25))
-        pause_icon_image = ImageTk.PhotoImage(pause_icon)
+        # Load the play and pause icons
+        play_icon = Image.open("assets/Play.png")
+        play_icon = play_icon.resize((button_height, button_height))
+        self.play_icon_image = ImageTk.PhotoImage(play_icon)
 
-        # button of Pause
+        pause_icon = Image.open("assets/Pause.png")
+        pause_icon = pause_icon.resize((button_height, button_height))
+        self.pause_icon_image = ImageTk.PhotoImage(pause_icon)
+
+        # button of Pause/Play
         self.btn_pause = tk.Button(
             self.top_frame,
-            image=pause_icon_image,
+            image=self.pause_icon_image,
             bg="#252525",
             activebackground="#252525",
             highlightthickness=0,
@@ -181,7 +186,7 @@ class App:
             relief=tk.FLAT,
             command=self.pause
         )
-        self.btn_pause.image = pause_icon_image
+        self.btn_pause.image = self.pause_icon_image
         self.btn_pause.grid(row=0, column=2)
 
         # 2.4. 添加运镜按钮
@@ -412,8 +417,12 @@ class App:
         all_words_exist = all(word.lower() in srun.lower() for word in claa)
         if all_words_exist:
             self.comm.command("HOLD")
+            self.btn_pause.config(image=self.play_icon_image)
+            self.btn_pause.image = self.play_icon_image
         else:
             self.comm.command("CONTINUE")
+            self.btn_pause.config(image=self.pause_icon_image)
+            self.btn_pause.image = self.pause_icon_image
 
     # 添加运镜按钮的回调函数
     def add_row(self):
@@ -877,17 +886,26 @@ class MockComm:
             "EXECUTE": lambda program: f"Executing {program}",
             "EXECUTE gkamain": "Executing gkamain",
             "PULSE 2666": "Pulse command received",
-            "SWITCH CS": "ON AIR",
-            "HOLD": "Holding"
+            "HOLD": "Holding",
+            "SWITCH CS": "Switching CS",
+            "CONTINUE": "Continuing"
         }
+        self.switch_cs_state = "ON AIR"
 
     def command(self, cmd):
         if cmd in self.commands:
             print(f"Robotic arm command: {cmd}")
             if cmd == "SWITCH CS":
+                response = self.switch_cs_state
+                self.switch_cs_state = "OFF AIR" if self.switch_cs_state == "ON AIR" else "ON AIR"
+                return True, response
+            elif callable(self.commands[cmd]):
+                return True, self.commands[cmd](cmd.split()[-1])
+            else:
                 return True, self.commands[cmd]
         else:
             print(f"Command not found: {cmd}")
+            return False, ""
 
 
 
