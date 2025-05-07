@@ -1,0 +1,8 @@
+/logs/*
+/.idea
+/*.png
+/program_data.json
+gkasnap/__pycache__/*
+release/*
+# OpenCV DLL
+gkasnap/opencv_world470.dll
