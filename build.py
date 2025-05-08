@@ -9,7 +9,7 @@ def clean_temp_files():
     
     for dir_name in dirs_to_clean:
         if os.path.exists(dir_name):
-            shutil.rmtree(dir_name)
+            shutil.rmtree(dir_name)           
             print(f"已清理 {dir_name} 目录")
     
     for file_name in files_to_clean:
@@ -24,7 +24,18 @@ def main():
     clean_temp_files()
     
     # 2. 使用 PyInstaller 构建单文件
-    subprocess.run(['pyinstaller', '--onefile', '--noconsole', 'main.py'], check=True)
+    subprocess.run([
+        'pyinstaller',
+        '--onefile',
+        '--noconsole',  # 注释掉这行，这样可以看到控制台输出
+        # '--add-data', 'gkasnap/gkasnap.exe;gkasnap',
+        '--hidden-import', 'win32pipe',
+        '--hidden-import', 'win32file',
+        '--hidden-import', 'win32api',
+        '--hidden-import', 'win32con',
+        '--hidden-import', 'win32timezone',
+        'main.py'
+    ], check=True)
     print("已构建 exe 文件")
     
     # 3. 创建 release 目录
@@ -36,6 +47,11 @@ def main():
     # 复制 exe 文件
     shutil.copy2('dist/main.exe', 'release/RoboticArmTools.exe')
     print("已复制 exe 文件")
+    
+    # 复制 config.json
+    if os.path.exists('config.json'):
+        shutil.copy2('config.json', 'release/config.json')
+        print("已复制 config.json 文件")
     
     # 复制资源目录
     for dir_name in ['assets', 'gkasnap', 'logs']:
