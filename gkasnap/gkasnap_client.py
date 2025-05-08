@@ -82,7 +82,7 @@ class GKASnap:
 
 if __name__ == "__main__":
     # 如果文件夹不存在则创建文件夹
-    save_path = "D:/gka_capture/"
+    save_path = "./gka_capture/"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     snap = GKASnap(save_path)
