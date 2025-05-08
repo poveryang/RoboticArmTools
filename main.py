@@ -3,9 +3,9 @@ import json
 import logging
 import os
 from datetime import datetime
-import clr
-clr.AddReference("krcc64")
-import KRcc
+# import clr
+# clr.AddReference("krcc64")
+# import KRcc
 import socket
 import threading
 import tkinter as tk
@@ -122,8 +122,8 @@ class App:
         self.on_air = False         # 跟踪 on-air 状态
 
         # TODO: 实例化 KRcc.Commu 类，用于与机械臂通信；示例中先用 MockComm
-        # self.comm = MockComm()
-        self.comm = KRcc.Commu(f"TCP {config['robotic_arm']['ip']}")
+        self.comm = MockComm()
+        # self.comm = KRcc.Commu(f"TCP {config['robotic_arm']['ip']}")
 
         # 初始化采集卡
         self.save_path = "./captured_images"
@@ -662,6 +662,23 @@ class App:
         self.comm.command(f"PULSE 2666")
 
     def delete_row(self, row):
+        # 获取当前所有行的原始Vizrt指令，以便后续重新分配
+        original_vizrt_indices = []
+        for r in range(1, self.row_count):
+            vizrt_labels = [w for w in self.inner_frame.grid_slaves(row=r, column=1) if isinstance(w, tk.Label)]
+            if vizrt_labels:
+                text = vizrt_labels[0].cget("text")
+                # 提取P后面的数字，例如从"P01C01"提取"01"
+                try:
+                    idx = int(text[1:3])
+                    original_vizrt_indices.append(idx)
+                except ValueError:
+                    original_vizrt_indices.append(r)
+
+        # 排除要删除的行
+        if 0 <= row < len(original_vizrt_indices):
+            del original_vizrt_indices[row]
+
         # 1) 删除UI
         for widget in self.inner_frame.grid_slaves(row=row + 1):
             widget.grid_forget()
@@ -676,22 +693,62 @@ class App:
             for widget in self.inner_frame.grid_slaves(row=r + 1):
                 widget.grid(row=r)
 
-        # 4) 重新给后续行的"删除"按钮更新 command
+        # 4) 重新给后续行的"删除"和"清除"按钮更新 command
         for r in range(row, self.row_count):
+            # 更新删除按钮
             delete_buttons = [w for w in self.inner_frame.grid_slaves(row=r + 1, column=7) if isinstance(w, tk.Button)]
             for btn in delete_buttons:
                 btn.config(command=lambda i=r: self.delete_row(i))
+            
+            # 更新清除按钮
+            clear_buttons = [w for w in self.inner_frame.grid_slaves(row=r + 1, column=6) if isinstance(w, tk.Button)]
+            for btn in clear_buttons:
+                btn.config(command=lambda i=r: self.clear_row(i))
 
-        # 5) 更新 Vizrt 指令标签
+        # 5) 更新 Vizrt 指令标签 - 保持原有编号顺序
         for r in range(row, self.row_count):
             vizrt_labels = [w for w in self.inner_frame.grid_slaves(row=r + 1, column=1) if isinstance(w, tk.Label)]
             for lbl in vizrt_labels:
-                lbl.config(text=f"P0{r + 1}C01")
+                idx = r
+                if idx < len(original_vizrt_indices):
+                    # 使用原始编号，但保持格式统一
+                    num = original_vizrt_indices[idx]
+                    if num < 10:
+                        lbl.config(text=f"P0{num}C01")
+                    else:
+                        lbl.config(text=f"P{num}C01")
+                else:
+                    # 如果没有原始编号可用，则使用当前行号
+                    lbl.config(text=f"P0{r + 1}C01")
 
-        # 5) 再次配置列宽 + 刷新 scrollregion
+        # 6) 再次配置列宽 + 刷新 scrollregion
         for index, config in enumerate(self.column_config):
             self.inner_frame.grid_columnconfigure(index, weight=config["weight"], minsize=config["minsize"])
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def clear_row(self, row):
+        # 确保 row 索引与实际位置匹配
+        grid_row = row + 1
+        
+        # Clear the program entry
+        if 0 <= row < len(self.program_entries):
+            self.program_entries[row].delete(0, tk.END)
+
+        # Clear the speed entry
+        if 0 <= row < len(self.speed_entries):
+            self.speed_entries[row].delete(0, tk.END)
+
+        # Clear the note entry
+        note_entries = [w for w in self.inner_frame.grid_slaves(row=grid_row, column=4) if isinstance(w, tk.Entry)]
+        for entry in note_entries:
+            entry.delete(0, tk.END)
+
+        # Clear the screenshot label
+        screenshot_labels = [w for w in self.inner_frame.grid_slaves(row=grid_row, column=0) if isinstance(w, tk.Label)]
+        for label in screenshot_labels:
+            label.config(image=self.upload_icon_image)
+            label.image = self.upload_icon_image
+            label.image_path = "未上传"
 
     def compare_p01c01_content(self):
         # 获取每行 P01C01 程序名中的内容并与 TCP 接收的数据对比
@@ -939,23 +996,6 @@ class App:
             program = program_entry.get()
             speed = speed_entry.get()
             self.print_program_and_speed(program, speed)
-
-    def clear_row(self, row):
-        # Clear the program entry
-        self.program_entries[row].delete(0, tk.END)
-
-        # Clear the speed entry
-        self.speed_entries[row].delete(0, tk.END)
-
-        # Clear the note entry
-        note_entry = self.inner_frame.grid_slaves(row=row + 1, column=4)[0]
-        note_entry.delete(0, tk.END)
-
-        # Clear the screenshot label
-        screenshot_label = self.inner_frame.grid_slaves(row=row + 1, column=0)[0]
-        screenshot_label.config(image=self.upload_icon_image)
-        screenshot_label.image = self.upload_icon_image
-        screenshot_label.image_path = "未上传"
 
     def open_file(self):
         file_path = filedialog.askopenfilename(
