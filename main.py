@@ -19,10 +19,10 @@ from gkasnap.gkasnap_client import GKASnap
 # 加载配置文件
 def load_config():
     try:
-        with open('ip_config.json', 'r', encoding='utf-8') as f:
+        with open('config.json', 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
-        messagebox.showerror("错误", "未找到配置文件 ip_config.json")
+        messagebox.showerror("错误", "未找到配置文件 config.json")
         return None
     except json.JSONDecodeError:
         messagebox.showerror("错误", "配置文件格式错误")
@@ -139,15 +139,19 @@ class App:
         self.top_image_frame.grid(row=0, column=0, sticky="ew")
 
         # Load and resize the header image to the window width
-        header_image_path = "assets/header_image.png"
-        header_image = Image.open(header_image_path)
-        header_image = header_image.resize(
-            (self.win_width, int(header_image.height * (self.win_width / header_image.width))))
-        self.header_image = ImageTk.PhotoImage(header_image)
+        header_image_path = config['header_image']['path']
+        try:
+            header_image = Image.open(header_image_path)
+            header_image = header_image.resize(
+                (self.win_width, int(header_image.height * (self.win_width / header_image.width))))
+            self.header_image = ImageTk.PhotoImage(header_image)
 
-        # Create Label to display the header image
-        self.header_label = Label(self.top_image_frame, image=self.header_image, borderwidth=0)
-        self.header_label.grid(row=0, column=0, sticky="ew")
+            # Create Label to display the header image
+            self.header_label = Label(self.top_image_frame, image=self.header_image, borderwidth=0)
+            self.header_label.grid(row=0, column=0, sticky="ew")
+        except Exception as e:
+            logging.error(f"无法加载header image: {e}")
+            messagebox.showwarning("警告", f"无法加载header image: {e}")
 
         # 2.创建顶部控件的 Frame
         self.top_frame = tk.Frame(self.root, bg="#252525")
