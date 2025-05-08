@@ -1,0 +1,9 @@
+{
+    "tcp_server": {
+        "ip": "localhost",
+        "port": 8888
+    },
+    "robotic_arm": {
+        "ip": "192.168.1.120"
+    }
+} 

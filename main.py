@@ -3,9 +3,9 @@ import json
 import logging
 import os
 from datetime import datetime
-# import clr
-# clr.AddReference("krcc64")
-# import KRcc
+import clr
+clr.AddReference("krcc64")
+import KRcc
 import socket
 import threading
 import tkinter as tk
@@ -15,6 +15,23 @@ import time
 
 from PIL import Image, ImageTk
 from gkasnap.gkasnap_client import GKASnap
+
+# 加载配置文件
+def load_config():
+    try:
+        with open('ip_config.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        messagebox.showerror("错误", "未找到配置文件 ip_config.json")
+        return None
+    except json.JSONDecodeError:
+        messagebox.showerror("错误", "配置文件格式错误")
+        return None
+
+# 获取配置
+config = load_config()
+if config is None:
+    exit(1)
 
 # Get the current date to use in the log file name
 current_date = datetime.now().strftime('%Y-%m-%d')
@@ -42,8 +59,7 @@ class TCPServerThread(threading.Thread):
 
     def run(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # self.server_socket.bind(('192.168.1.186', 8888))
-        self.server_socket.bind(('localhost', 8888))
+        self.server_socket.bind((config['tcp_server']['ip'], config['tcp_server']['port']))
         self.server_socket.listen(5)
         logging.info("TCP server started and waiting for connections...")
         self.app.update_vizrt_button("listening")
@@ -105,23 +121,18 @@ class App:
         self.server_active = False  # 跟踪服务端是否活跃
         self.on_air = False         # 跟踪 on-air 状态
 
-        self.TCP_HOST = '192.168.1.186'  # 监听所有网络接口
-        self.TCP_PORT = 8888             # TCP 服务器端口
-
         # TODO: 实例化 KRcc.Commu 类，用于与机械臂通信；示例中先用 MockComm
-        self.comm = MockComm()
-        # self.comm = KRcc.Commu("TCP 192.168.1.120")
+        # self.comm = MockComm()
+        self.comm = KRcc.Commu(f"TCP {config['robotic_arm']['ip']}")
 
         # 初始化采集卡
         self.save_path = "./captured_images"
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
         self.gka_snap = GKASnap(self.save_path)
-        try:
-            if not self.gka_snap.start():
-                messagebox.showwarning("警告", "采集卡启动失败，图片上传功能将不可用")
-        except Exception as e:
-            messagebox.showwarning("警告", f"采集卡启动失败: {str(e)}，图片上传功能将不可用")
+        # 启动采集卡
+        if not self.gka_snap.start():
+            messagebox.showwarning("警告", "采集卡启动失败，图片上传功能将不可用")
 
         # 1. 创建顶部 Frame 来放置图片
         self.top_image_frame = tk.Frame(self.root, bg="#252525")
