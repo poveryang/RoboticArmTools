@@ -4,6 +4,7 @@ import win32pipe
 import win32file
 import os
 from threading import Thread
+import sys
 
 class GKASnap:
     def __init__(self, save_path):
@@ -15,9 +16,16 @@ class GKASnap:
     def start(self):
         # 启动gkasnap.exe
         try:
-            # 获取当前脚本所在目录
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            exe_path = os.path.join(current_dir, 'gkasnap.exe')
+            # 获取程序运行目录
+            if getattr(sys, 'frozen', False):
+                # 如果是打包后的程序
+                base_dir = os.path.dirname(sys.executable)
+                exe_path = os.path.join(base_dir, 'gkasnap', 'gkasnap.exe')
+            else:
+                # 如果是开发环境
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                exe_path = os.path.join(base_dir, 'gkasnap.exe')
+            
             print(f"当前工作目录: {os.getcwd()}")
             print(f"检查文件是否存在: {os.path.exists(exe_path)}")
             print(f"完整文件路径: {exe_path}")
