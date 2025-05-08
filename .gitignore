@@ -4,5 +4,7 @@
 /program_data.json
 gkasnap/__pycache__/*
 release/*
+captured_images/*
+
 # OpenCV DLL
-gkasnap/opencv_world470.dll
+gkasnap/opencv_world*.dll
